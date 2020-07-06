@@ -1,4 +1,4 @@
-import { scaleLinear } from "d3-scale";
+import { scaleLinear } from "d3-scale";;
 
 const getGetPxIdx = w => (x, y) => {
   var r = y * (w * 4) + x * 4;
@@ -7,6 +7,8 @@ const getGetPxIdx = w => (x, y) => {
 
 const rand8 = () => Math.floor(Math.random() * 255)
 
+const GLITTER_COUNT = 2000;
+
 class THERAPY {
   constructor(el){
     this.el = document.getElementById("content");
@@ -14,11 +16,13 @@ class THERAPY {
     this.measureCanvas();
     this.xScale = scaleLinear().range([0, this.w]);
     this.yScale = scaleLinear().range([0, this.h]);
+    this.intensityScale = scaleLinear().domain([-4, 4]);
+    this.intensityScale.clamp(true);
 
     this.sprinkleGlitter();
     this.setupLights();
 
-    if(false){
+    if(true){
       // start render loop
       const doRender = function(){
         this.render();
@@ -41,13 +45,12 @@ class THERAPY {
 
   sprinkleGlitter(){
     // TODO - parameterize
-    this.glitter = new Array(1000).fill().map(i => {
+    this.glitter = new Array(GLITTER_COUNT).fill().map(i => {
       return {
         x: Math.floor(this.xScale(Math.random())),
         y: Math.floor(this.yScale(Math.random())),
-        angleX: Math.floor(Math.random() * 10) - 5,
-        angleY: Math.floor(Math.random() * 10) - 5,
-        color: [rand8(), rand8(), rand8(), 255]
+        angleX: (Math.random() * Math.PI) - Math.PI,
+        color: [rand8(), rand8(), rand8()]
       }
     });
     this.reflections = this.glitter.map(() => [0, 0, 0, 255]);
@@ -72,10 +75,16 @@ class THERAPY {
   }
   
   illuminate(){
-    // TODO - compute color values for each glitter particle
-    this.reflections = this.glitter.map(({ color }) => {
-      return Math.random() > 0.5 ? color : [0, 0, 0, 255];
+    const eye = this.lights[0];
+    // pretend the mouse position is viewer eye
+    this.reflections = this.glitter.map(({ x, y, angleX, color }) => {
+      const m1 = Math.tan(angleX);
+      const m2 = (eye.y - y) / (eye.x - x);
+      const theta = (m2 - m1) / (1 + (m1 * m2) );
+      const intensity = this.intensityScale(theta);
+      return color.map(sub => sub * intensity);
     });
+
   }
 
   drawr(){
@@ -87,7 +96,7 @@ class THERAPY {
     const light = this.lights[0]
     const lightDiameter = 400;
     const gradient = this.ctx.createRadialGradient(
-      light.x, light.y, 50,
+      light.x, light.y, 20,
       light.x, light.y, lightDiameter / 2
     );
     gradient.addColorStop(0, "rgba(255, 255, 255, 0.1)");
@@ -100,19 +109,20 @@ class THERAPY {
       lightDiameter
     );
     
-    const image = this.ctx.getImageData(0, 0, this.w, this.h);
     // bunch o dots
-    this.glitter.forEach(({ x, y }, i) => {
-      const [ r, g, b, a ] = this.getPxIdx(x, y);
+    const image = this.ctx.getImageData(0, 0, this.w, this.h);
+    this.glitter.forEach((glit, i) => {
+      const [ r, g, b, a ] = this.getPxIdx(glit.x, glit.y);
       const reflectedColor = this.reflections[i];
       image.data[r] = reflectedColor[0];
       image.data[g] = reflectedColor[1];
       image.data[b] = reflectedColor[2];
-      image.data[a] = reflectedColor[3];
+      image.data[a] = 255;
     });
 
-    // TODO - glow around dots of max intensity?
     this.ctx.putImageData(image, 0, 0);
+
+    // TODO - draw glowy intense points
   }
 }
 
